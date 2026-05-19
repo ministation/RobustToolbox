@@ -106,24 +106,39 @@ internal sealed class NetEncryption
         nonceData.Fill(0);
         BinaryPrimitives.WriteUInt64LittleEndian(nonceData, nonce);
 
-        var result = CryptoAeadXChaCha20Poly1305Ietf.Decrypt(
-            // plaintext
-            message.Data,
-            out var messageLength,
-            // ciphertext
-            buffer.AsSpan(0, cipherText.Length),
-            // additional data (unused)
-            ReadOnlySpan<byte>.Empty,
-            // nonce
-            nonceData,
-            // key
-            _key);
+        try
+        {
+            bool result;
+            int messageLength;
 
-        message.Position = 0;
-        message.LengthBytes = messageLength;
+            try
+            {
+                result = CryptoAeadXChaCha20Poly1305Ietf.Decrypt(
+                    // plaintext
+                    message.Data,
+                    out messageLength,
+                    // ciphertext
+                    buffer.AsSpan(0, cipherText.Length),
+                    // additional data (unused)
+                    ReadOnlySpan<byte>.Empty,
+                    // nonce
+                    nonceData,
+                    // key
+                    _key);
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
 
-        ArrayPool<byte>.Shared.Return(buffer);
+            message.Position = 0;
+            message.LengthBytes = messageLength;
 
-        return result;
+            return result;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 }
