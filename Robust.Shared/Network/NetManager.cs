@@ -114,6 +114,13 @@ namespace Robust.Shared.Network
         [Dependency] private readonly IHWId _hwId = default!;
 
         /// <summary>
+        ///     Whether we bother to log problematic packets. Set by <see cref="CVars.NetLogging"/>.
+        /// </summary>
+        private bool _logPacketIssues = false;
+        private static readonly TimeSpan PacketIssueLogWindow = TimeSpan.FromSeconds(2);
+        private readonly Dictionary<string, TimeSpan> _packetIssueLogNext = new();
+
+        /// <summary>
         ///     Holds lookup table for NetMessage.Id -> NetMessage.Type
         /// </summary>
         private readonly Dictionary<string, MessageData> _messages = new();
@@ -258,6 +265,7 @@ namespace Robust.Shared.Network
             _config.OnValueChanged(CVars.NetLidgrenLogError, LidgrenLogErrorChanged);
 
             _config.OnValueChanged(CVars.NetVerbose, NetVerboseChanged);
+            _config.OnValueChanged(CVars.NetLogging, NetLoggingChanged);
             if (isServer)
             {
                 _config.OnValueChanged(CVars.AuthMode, OnAuthModeChanged, invokeImmediately: true);
@@ -278,6 +286,24 @@ namespace Robust.Shared.Network
             {
                 SAGenerateKeys();
             }
+        }
+
+        private void NetLoggingChanged(bool obj)
+        {
+            _logPacketIssues = obj;
+        }
+
+        private bool ShouldLogPacketIssue(string issueKey)
+        {
+            if (!_logPacketIssues)
+                return false;
+
+            var now = _timing.RealTime;
+            if (_packetIssueLogNext.TryGetValue(issueKey, out var next) && now < next)
+                return false;
+
+            _packetIssueLogNext[issueKey] = now + PacketIssueLogWindow;
+            return true;
         }
 
         private void LidgrenLogWarningChanged(bool newValue)
@@ -871,19 +897,25 @@ namespace Robust.Shared.Network
             var peer = msg.SenderConnection.Peer;
             if (peer.Status == NetPeerStatus.ShutdownRequested)
             {
-                _logger.Warning($"{msg.SenderConnection.RemoteEndPoint}: Received data message, but shutdown is requested.");
+                if (ShouldLogPacketIssue("data-while-shutdown-requested"))
+                    _logger.Warning($"{msg.SenderConnection.RemoteEndPoint}: Received data message, but shutdown is requested.");
+
                 return true;
             }
 
             if (peer.Status == NetPeerStatus.NotRunning)
             {
-                _logger.Warning($"{msg.SenderConnection.RemoteEndPoint}: Received data message, peer is not running.");
+                if (ShouldLogPacketIssue("data-while-not-running"))
+                    _logger.Warning($"{msg.SenderConnection.RemoteEndPoint}: Received data message, peer is not running.");
+
                 return true;
             }
 
             if (!IsConnected)
             {
-                _logger.Warning($"{msg.SenderConnection.RemoteEndPoint}: Received data message, but not connected.");
+                if (ShouldLogPacketIssue("data-while-not-connected"))
+                    _logger.Warning($"{msg.SenderConnection.RemoteEndPoint}: Received data message, but not connected.");
+
                 return true;
             }
 
@@ -898,19 +930,45 @@ namespace Robust.Shared.Network
 
             if (msg.LengthBytes < 1)
             {
-                _logger.Warning($"{msg.SenderConnection.RemoteEndPoint}: Received empty packet.");
+                if (ShouldLogPacketIssue("empty-packet"))
+                    _logger.Warning($"{msg.SenderConnection.RemoteEndPoint}: Received empty packet.");
+
+                msg.SenderConnection.Disconnect("Received empty/weird packet", false);
                 return true;
             }
 
             if (!_channels.TryGetValue(msg.SenderConnection, out var channel))
             {
-                _logger.Warning($"{msg.SenderConnection.RemoteEndPoint}: Got unexpected data packet before handshake completion.");
+                if (ShouldLogPacketIssue("unexpected-before-handshake"))
+                    _logger.Debug($"{msg.SenderConnection.RemoteEndPoint}: Got unexpected data packet before handshake completion.");
 
                 msg.SenderConnection.Disconnect("Unexpected packet before handshake completion");
                 return true;
             }
 
-            channel.Encryption?.Decrypt(msg);
+            bool decrypted;
+            try
+            {
+                decrypted = channel.Encryption?.TryDecrypt(msg) ?? true;
+            }
+            catch (Exception e)
+            {
+                if (ShouldLogPacketIssue("decrypt-exception"))
+                    _logger.Debug($"{msg.SenderConnection.RemoteEndPoint}: Exception while decrypting packet: {e}");
+
+                msg.SenderConnection.Disconnect("Failed to decrypt packet.", false);
+                return true;
+            }
+
+            if (!decrypted)
+            {
+                if (ShouldLogPacketIssue("decrypt-failed"))
+                    _logger.Debug($"{msg.SenderConnection.RemoteEndPoint}: Got a packet that fails to decrypt.");
+
+
+                msg.SenderConnection.Disconnect("Failed to decrypt packet.", false);
+                return true;
+            }
 
             var id = msg.ReadByte();
 
@@ -918,7 +976,8 @@ namespace Robust.Shared.Network
 
             if (entry == null)
             {
-                _logger.Warning($"{msg.SenderConnection.RemoteEndPoint}: Got net message with invalid ID {id}.");
+                if (ShouldLogPacketIssue($"invalid-message-id:{id}"))
+                    _logger.Warning($"{msg.SenderConnection.RemoteEndPoint}: Got net message with invalid ID {id}.");
 
                 channel.Disconnect("Got NetMessage with invalid ID");
                 return true;
@@ -928,7 +987,8 @@ namespace Robust.Shared.Network
 
             if (!channel.IsHandshakeComplete && !entry.IsHandshake)
             {
-                _logger.Warning($"{msg.SenderConnection.RemoteEndPoint}: Got non-handshake message {entry.Type.Name} before handshake completion.");
+                if (ShouldLogPacketIssue($"non-handshake-before-complete:{entry.Type.Name}"))
+                    _logger.Warning($"{msg.SenderConnection.RemoteEndPoint}: Got non-handshake message {entry.Type.Name} before handshake completion.");
 
                 channel.Disconnect("Got unacceptable net message before handshake completion");
                 return true;
@@ -956,12 +1016,16 @@ namespace Robust.Shared.Network
             }
             catch (InvalidCastException ice)
             {
-                _logger.Error($"{msg.SenderConnection.RemoteEndPoint}: Wrong deserialization of {type.Name} packet:\n{ice}");
+                if (ShouldLogPacketIssue($"deserialization-invalid-cast:{type.Name}"))
+                    _logger.Error($"{msg.SenderConnection.RemoteEndPoint}: Wrong deserialization of {type.Name} packet:\n{ice}");
+                channel.Disconnect("Failed to deserialize packet.", false);
                 return true;
             }
             catch (Exception e) // yes, we want to catch ALL exeptions for security
             {
-                _logger.Error($"{msg.SenderConnection.RemoteEndPoint}: Failed to deserialize {type.Name} packet:\n{e}");
+                if (ShouldLogPacketIssue($"deserialization-exception:{type.Name}"))
+                    _logger.Error($"{msg.SenderConnection.RemoteEndPoint}: Failed to deserialize {type.Name} packet:\n{e}");
+                channel.Disconnect("Failed to deserialize packet.", false);
                 return true;
             }
 
