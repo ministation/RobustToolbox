@@ -406,6 +406,52 @@ namespace Robust.Shared
         public static readonly CVarDef<bool> NetHWId =
             CVarDef.Create("net.hwid", true, CVar.SERVERONLY);
 
+        /// <summary>
+        /// Maximum simultaneous Lidgren connections allowed per IP. 0 disables the limit.
+        /// </summary>
+        public static readonly CVarDef<int> NetIpMaxConcurrent =
+            CVarDef.Create("net.ip_max_concurrent", 4, CVar.SERVERONLY);
+
+        /// <summary>
+        /// Maximum new connection attempts allowed per IP within <see cref="NetIpConnectRatePeriod"/>.
+        /// 0 disables the limit.
+        /// </summary>
+        public static readonly CVarDef<int> NetIpConnectRateLimit =
+            CVarDef.Create("net.ip_connect_rate_limit", 10, CVar.SERVERONLY);
+
+        /// <summary>
+        /// Window in seconds for <see cref="NetIpConnectRateLimit"/>.
+        /// </summary>
+        public static readonly CVarDef<float> NetIpConnectRatePeriod =
+            CVarDef.Create("net.ip_connect_rate_period", 10f, CVar.SERVERONLY);
+
+        /// <summary>
+        /// Initial block duration in seconds after violating connection limits.
+        /// Each repeat offense doubles the duration until <see cref="NetIpViolationBlockMaxDuration"/> is exceeded,
+        /// at which point the IP is blocked permanently for the rest of the server uptime.
+        /// 0 only denies attempts without blocking.
+        /// </summary>
+        public static readonly CVarDef<float> NetIpViolationBlockDuration =
+            CVarDef.Create("net.ip_violation_block_duration", 300f, CVar.SERVERONLY);
+
+        /// <summary>
+        /// Maximum temporary block duration in seconds before an IP is permanently blocked.
+        /// </summary>
+        public static readonly CVarDef<float> NetIpViolationBlockMaxDuration =
+            CVarDef.Create("net.ip_violation_block_max_duration", 3600f, CVar.SERVERONLY);
+
+        /// <summary>
+        /// How often in seconds to clean up expired per-IP connection filter state.
+        /// </summary>
+        public static readonly CVarDef<float> NetIpFilterCleanupPeriod =
+            CVarDef.Create("net.ip_filter_cleanup_period", 60f, CVar.SERVERONLY);
+
+        /// <summary>
+        /// Path relative to server user data where connection filter bans are persisted.
+        /// </summary>
+        public static readonly CVarDef<string> NetIpFilterBanFile =
+            CVarDef.Create("net.ip_filter_ban_file", "/net_ip_filter_bans.json", CVar.SERVERONLY);
+
 
         /**
          * SUS
