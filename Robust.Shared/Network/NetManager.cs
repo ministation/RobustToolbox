@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Lidgren.Network;
 using Prometheus;
 using Robust.Shared.Configuration;
+using Robust.Shared.ContentPack;
 using Robust.Shared.IoC;
 using Robust.Shared.Log;
 using Robust.Shared.Network.Transfer;
@@ -114,6 +115,7 @@ namespace Robust.Shared.Network
         [Dependency] private readonly HttpClientHolder _http = default!;
         [Dependency] private readonly IHWId _hwId = default!;
         [Dependency] private readonly ITransferManager _transfer = default!;
+        [Dependency] private readonly IResourceManager _resource = default!;
 
         /// <summary>
         ///     Whether we bother to log problematic packets. Set by <see cref="CVars.NetLogging"/>.
@@ -698,7 +700,7 @@ namespace Robust.Shared.Network
             if (IsServer)
             {
                 netConfig.SetMessageTypeEnabled(NetIncomingMessageType.ConnectionApproval, true);
-                netConfig.MaximumConnections = _config.GetEffectiveMaxConnections();
+                netConfig.MaximumConnections = _config.GetLidgrenMaxConnections();
             }
             else
             {
@@ -800,8 +802,11 @@ namespace Robust.Shared.Network
 
             var newStatus = (NetConnectionStatus) msg.ReadByte();
             var reason = msg.ReadString();
-            _logger.Debug("{ConnectionEndpoint}: Status changed to {ConnectionStatus}, reason: {ConnectionStatusReason}",
-                sender.RemoteEndPoint, newStatus, reason);
+            if (ShouldLogConnectionStatus(sender))
+            {
+                _logger.Debug("{ConnectionEndpoint}: Status changed to {ConnectionStatus}, reason: {ConnectionStatusReason}",
+                    sender.RemoteEndPoint, newStatus, reason);
+            }
 
             if (_awaitingStatusChange.TryGetValue(sender, out var resume))
             {
@@ -816,12 +821,21 @@ namespace Robust.Shared.Network
                 case NetConnectionStatus.Connected:
                     if (IsServer)
                     {
+                        if (TryConsumeRejectOnConnected(sender, out var rejectReason))
+                        {
+                            sender.Disconnect(rejectReason);
+                            break;
+                        }
+
                         HandleHandshake(peer, sender);
                     }
 
                     break;
 
                 case NetConnectionStatus.Disconnected:
+                    _rejectOnConnected.Remove(sender);
+                    ReleaseConnectionSlot(sender);
+
                     if (_awaitingData.TryGetValue(sender, out var awaitInfo))
                     {
                         awaitInfo.Item1.Dispose();
