@@ -1154,7 +1154,7 @@ public sealed class EntityDeserializer :
     {
         if (node.Value == "invalid")
         {
-            if (CurrentComponent == "Transform")
+            if (CurrentComponent is "Transform" or "DeviceNetwork" or "DeviceList")
                 return EntityUid.Invalid;
 
             if (!Options.LogInvalidEntities)
