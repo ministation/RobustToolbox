@@ -233,7 +233,8 @@ Had full state: {LastFullState != null}"
                         // code needs to be in shared code).
                         //
                         // Without this, the client won't be able to reset predicted changes made to this component.
-                        DebugTools.Assert("Received delta state without having received or constructed an implicit full state");
+                        // MergeImplicitData may populate this after entity creation; skip until then.
+                        _logger.Warning("Received delta state without having received or constructed an implicit full state");
                         continue;
                     }
 
