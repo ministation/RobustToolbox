@@ -80,7 +80,7 @@ internal sealed partial class PvsSystem
             if (msg.ShouldSendReliably())
             {
                 data.RequestedFull = false;
-                data.LastReceivedAck = _gameTiming.CurTick;
+                data.LastReceivedAck = data.StateToTick;
                 lock (PendingAcks)
                 {
                     PendingAcks.Add(data.Session);
@@ -90,7 +90,7 @@ internal sealed partial class PvsSystem
         else
         {
             // Always "ack" dummy sessions.
-            data.LastReceivedAck = _gameTiming.CurTick;
+            data.LastReceivedAck = data.StateToTick;
             data.RequestedFull = false;
             lock (PendingAcks)
             {

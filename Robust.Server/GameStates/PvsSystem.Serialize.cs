@@ -62,6 +62,8 @@ internal sealed partial class PvsSystem
         ComputeSessionState(data);
         InterlockedHelper.Min(ref _oldestAck, data.FromTick.Value);
         DebugTools.AssertEqual(data.StateStream, null);
+        DebugTools.AssertNotNull(data.State);
+        data.StateToTick = data.State.ToSequence;
 
         // PVS benchmarks use dummy sessions.
         // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract

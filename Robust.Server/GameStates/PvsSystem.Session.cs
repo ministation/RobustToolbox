@@ -73,6 +73,8 @@ internal sealed partial class PvsSystem
         DebugTools.AssertNull(session.State);
 
         session.FromTick = session.RequestedFull ? GameTick.Zero : session.LastReceivedAck;
+        if (session.FromTick >= _gameTiming.CurTick)
+            session.FromTick = _gameTiming.CurTick > GameTick.Zero ? _gameTiming.CurTick - 1 : GameTick.Zero;
         session.LastInput = _input.GetLastInputCommand(session.Session);
         session.LastMessage = _netEntMan.GetLastMessageSequence(session.Session);
         session.VisMask = EyeComponent.DefaultVisibilityMask;

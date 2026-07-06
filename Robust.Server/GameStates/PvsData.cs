@@ -101,6 +101,13 @@ internal sealed class PvsSession(ICommonSession session, ResizableMemoryRegion<P
     public GameTick LastReceivedAck;
 
     /// <summary>
+    /// The server tick that the queued <see cref="StateStream"/> was built for.
+    /// Used when optimistically updating <see cref="LastReceivedAck"/> after a reliable send,
+    /// because async sends may complete after <see cref="IGameTiming.CurTick"/> has advanced.
+    /// </summary>
+    public GameTick StateToTick;
+
+    /// <summary>
     /// Start tick for the time window of data that has to be sent to this player.
     /// </summary>
     public GameTick FromTick;
