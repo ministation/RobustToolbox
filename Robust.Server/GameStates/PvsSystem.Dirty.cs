@@ -46,7 +46,7 @@ namespace Robust.Server.GameStates
 
             _addEntities = add;
             _dirtyEntities = dirty;
-            _currentIndex = ((int)_gameTiming.CurTick.Value + 1) % DirtyBufferSize;
+            _currentIndex = (int)_gameTiming.CurTick.Value % DirtyBufferSize;
         }
 
         private void InitializeDirty()
