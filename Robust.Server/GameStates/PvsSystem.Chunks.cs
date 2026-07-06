@@ -216,9 +216,8 @@ internal sealed partial class PvsSystem
         var task = _parallelMgr.Process(_chunkJob, _chunkJob.Count);
 
         UpdateCleanChunks();
-        CacheGlobalOverrides();
-
         task.WaitOne();
+        CacheGlobalOverrides();
     }
 
     /// <summary>

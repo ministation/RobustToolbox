@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using Robust.Shared.GameObjects;
 using Robust.Shared.Map.Components;
 using Robust.Shared.Utility;
@@ -111,7 +112,19 @@ internal sealed partial class PvsSystem
             return;
 
         ref var ptr = ref _metadataMemory.GetRef(meta.PvsData.Index);
+        ptr.NetEntity = meta.NetEntity;
         ptr.VisMask = meta.VisibilityMask;
         ptr.LifeStage = meta.EntityLifeStage;
+        ptr.LastModifiedTick = meta.EntityLastModifiedTick;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void SyncAndValidateMetadata(MetaDataComponent meta)
+    {
+        SyncMetadata(meta);
+#if DEBUG
+        if (meta.PvsData != PvsIndex.Invalid)
+            _metadataMemory.GetRef(meta.PvsData.Index).Validate(meta);
+#endif
     }
 }

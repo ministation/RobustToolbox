@@ -56,8 +56,8 @@ internal sealed partial class PvsSystem
         var span = CollectionsMarshal.AsSpan(chunk.Contents)[..count];
         foreach (ref var ent in span)
         {
-            ref var meta = ref _metadataMemory.GetRef(ent.Ptr.Index);
-            meta.Validate(ent.Meta);
+            SyncAndValidateMetadata(ent.Meta);
+            ref var meta = ref _metadataMemory.GetRef(ent.Meta.PvsData.Index);
             if ((mask & meta.VisMask) == meta.VisMask)
                 AddEntity(session, ref ent, ref meta, fromTick);
         }

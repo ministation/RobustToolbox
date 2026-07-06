@@ -24,8 +24,8 @@ internal sealed partial class PvsSystem
 
         foreach (ref var ent in CollectionsMarshal.AsSpan(_cachedGlobalOverride))
         {
-            ref var meta = ref _metadataMemory.GetRef(ent.Ptr.Index);
-            meta.Validate(ent.Meta);
+            SyncAndValidateMetadata(ent.Meta);
+            ref var meta = ref _metadataMemory.GetRef(ent.Meta.PvsData.Index);
 
             // PVS overrides still respect visibility masks
             if ((mask & meta.VisMask) == meta.VisMask)
@@ -55,8 +55,8 @@ internal sealed partial class PvsSystem
         var fromTick = session.FromTick;
         foreach (ref var ent in CollectionsMarshal.AsSpan(_cachedForceOverride))
         {
-            ref var meta = ref _metadataMemory.GetRef(ent.Ptr.Index);
-            meta.Validate(ent.Meta);
+            SyncAndValidateMetadata(ent.Meta);
+            ref var meta = ref _metadataMemory.GetRef(ent.Meta.PvsData.Index);
             AddEntity(session, ref ent, ref meta, fromTick);
         }
 

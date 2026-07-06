@@ -270,7 +270,7 @@ internal sealed partial class PvsSystem
 
         meta.PvsData = index;
         metadata.NetEntity = meta.NetEntity;
-        metadata.LastModifiedTick = meta.LastModifiedTick;
+        metadata.LastModifiedTick = meta.EntityLastModifiedTick;
         metadata.VisMask = meta.VisibilityMask;
         metadata.LifeStage = meta.EntityLifeStage;
 #if DEBUG
