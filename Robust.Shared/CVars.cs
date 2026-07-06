@@ -280,6 +280,13 @@ namespace Robust.Shared
             CVarDef.Create("net.pvs_compress_level", 3, CVar.ARCHIVE);
 
         /// <summary>
+        /// Number of ticks of dirty-entity history used when building per-client game states.
+        /// Clients with ping higher than this buffer (in seconds: buffer / tickrate) may see PVS budget spikes.
+        /// </summary>
+        public static readonly CVarDef<int> NetPvsDirtyBufferTicks =
+            CVarDef.Create("net.pvs_dirty_buffer_ticks", 20, CVar.ARCHIVE | CVar.SERVERONLY);
+
+        /// <summary>
         /// Log late input messages from clients.
         /// </summary>
         public static readonly CVarDef<bool> NetLogLateMsg =

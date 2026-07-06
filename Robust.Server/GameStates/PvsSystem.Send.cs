@@ -1,30 +1,49 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Prometheus;
 using Robust.Shared.Log;
 using Robust.Shared.Network.Messages;
 using Robust.Shared.Player;
+using Robust.Shared.Threading;
 using Robust.Shared.Utility;
 
 namespace Robust.Server.GameStates;
 
 internal sealed partial class PvsSystem
 {
+    private WaitHandle? _sendTask;
+
     /// <summary>
     /// Compress and send game states to connected clients.
     /// </summary>
     private void SendStates()
     {
-        // TODO PVS make this async
-        // AFAICT ForEachAsync doesn't support using a threadlocal PvsThreadResources.
-        // Though if it is getting pooled, does it really matter?
+        // When async is enabled, compress+send runs after the critical tick via ProcessSendStates.
+        if (_async)
+            return;
 
-        // If this does get run async, then ProcessDisconnections() has to ensure that the job has finished before modifying
-        // the sessions array
+        SendStatesNow();
+    }
 
+    private void SendStatesNow()
+    {
         using var _ = Histogram.WithLabels("Send States").NewTimer();
         var opts = new ParallelOptions {MaxDegreeOfParallelism = _parallelMgr.ParallelProcessCount};
         Parallel.ForEach(_sessions, opts, _threadResourcesPool.Get, SendSessionState, _threadResourcesPool.Return);
+    }
+
+    private void ProcessSendStates()
+    {
+        if (_sessions.Length == 0)
+            return;
+
+        DebugTools.AssertNull(_sendTask);
+
+        if (!_async)
+            return;
+
+        _sendTask = _parallelMgr.Process(_sendJob, _sendJob.Count);
     }
 
     private PvsThreadResources SendSessionState(PvsSession data, ParallelLoopState state, PvsThreadResources resource)
@@ -81,5 +100,34 @@ internal sealed partial class PvsSystem
 
         data.StateStream?.Dispose();
         data.StateStream = null;
+    }
+
+    private record struct PvsSendJob(PvsSystem Pvs) : IParallelRobustJob
+    {
+        public int BatchSize => 1;
+        public int Count => Pvs._sessions.Length;
+
+        public void Execute(int index)
+        {
+            try
+            {
+                var resource = Pvs._threadResourcesPool.Get();
+                try
+                {
+                    Pvs.SendSessionState(Pvs._sessions[index], resource.CompressionContext);
+                }
+                finally
+                {
+                    Pvs._threadResourcesPool.Return(resource);
+                }
+            }
+            catch (Exception e)
+            {
+                Pvs.Log.Log(LogLevel.Error, e, $"Caught exception while sending mail for session index {index}.");
+#if !EXCEPTION_TOLERANCE
+                throw;
+#endif
+            }
+        }
     }
 }

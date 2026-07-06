@@ -14,7 +14,7 @@ internal sealed class ReplayRecordingManager : SharedReplayRecordingManager, ISe
     [Dependency] private readonly IEntitySystemManager _sysMan = default!;
 
     private PvsSystem _pvs = default!;
-    private PvsSession _pvsSession = new(default!, new ResizableMemoryRegion<PvsData>(1)) { DisableCulling = true };
+    private PvsSession _pvsSession = new(default!, new ResizableMemoryRegion<PvsData>(1), 20) { DisableCulling = true };
 
     public override void Initialize()
     {

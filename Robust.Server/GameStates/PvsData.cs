@@ -18,7 +18,7 @@ namespace Robust.Server.GameStates;
 /// <summary>
 /// Class for storing session specific PVS data.
 /// </summary>
-internal sealed class PvsSession(ICommonSession session, ResizableMemoryRegion<PvsData> memoryRegion)
+internal sealed class PvsSession(ICommonSession session, ResizableMemoryRegion<PvsData> memoryRegion, int dirtyBufferCapacity)
 {
 #if DEBUG
     public HashSet<NetEntity> ToSendSet = new();
@@ -31,9 +31,9 @@ internal sealed class PvsSession(ICommonSession session, ResizableMemoryRegion<P
     public INetChannel Channel => Session.Channel;
 
     /// <summary>
-    /// All entities that this session saw during the last <see cref="PvsSystem.DirtyBufferSize"/> ticks.
+    /// All entities that this session saw during the last dirty-buffer tick window.
     /// </summary>
-    public readonly OverflowDictionary<GameTick, List<PvsIndex>> PreviouslySent = new(PvsSystem.DirtyBufferSize);
+    public readonly OverflowDictionary<GameTick, List<PvsIndex>> PreviouslySent = new(dirtyBufferCapacity);
 
     /// <summary>
     /// <see cref="PreviouslySent"/> overflow in case a player's last ack is more than
@@ -118,6 +118,11 @@ internal sealed class PvsSession(ICommonSession session, ResizableMemoryRegion<P
     public uint LastInput;
 
     /// <summary>
+    /// Entities queued for state serialization after PVS selection completes.
+    /// </summary>
+    public readonly List<PvsPendingEntityState> PendingStates = new();
+
+    /// <summary>
     /// The game state for this tick,
     /// </summary>
     public GameState? State;
@@ -141,8 +146,26 @@ internal sealed class PvsSession(ICommonSession session, ResizableMemoryRegion<P
         Chunks.Clear();
         ChunkSet.Clear();
         States.Clear();
+        PendingStates.Clear();
         State = null;
     }
+}
+
+/// <summary>
+/// Entity queued for deferred game-state serialization.
+/// </summary>
+internal readonly struct PvsPendingEntityState(
+    EntityUid Uid,
+    MetaDataComponent Meta,
+    bool Entered,
+    bool FullState,
+    GameTick StateFromTick)
+{
+    public readonly EntityUid Uid = Uid;
+    public readonly MetaDataComponent Meta = Meta;
+    public readonly bool Entered = Entered;
+    public readonly bool FullState = FullState;
+    public readonly GameTick StateFromTick = StateFromTick;
 }
 
 /// <summary>

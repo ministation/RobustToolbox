@@ -43,7 +43,7 @@ internal sealed partial class PvsSystem : EntitySystem
 
     // TODO make this a cvar. Make it in terms of seconds and tie it to tick rate?
     // Main issue is that I CBF figuring out the logic for handling it changing mid-game.
-    public const int DirtyBufferSize = 20;
+    public int DirtyBufferSize { get; private set; } = 20;
     // Note: If a client has ping higher than TickBuffer / TickRate, then the server will treat every entity as if it
     // had entered PVS for the first time. Note that due to the PVS budget, this buffer is easily overwhelmed.
 
@@ -76,6 +76,7 @@ internal sealed partial class PvsSystem : EntitySystem
     private PvsAckJob _ackJob;
     private PvsChunkJob _chunkJob;
     private PvsLeaveJob _leaveJob;
+    private PvsSendJob _sendJob;
     private PvsDeletionsJob _deletionJob;
 
     private EntityQuery<EyeComponent> _eyeQuery;
@@ -124,6 +125,7 @@ internal sealed partial class PvsSystem : EntitySystem
 
         _deletionJob = new PvsDeletionsJob(this);
         _leaveJob = new PvsLeaveJob(this);
+        _sendJob = new PvsSendJob(this);
         _chunkJob = new PvsChunkJob(this);
         _ackJob = new PvsAckJob(this);
 
@@ -148,11 +150,13 @@ internal sealed partial class PvsSystem : EntitySystem
         Subs.CVar(_configManager, CVars.NetForceAckThreshold, OnForceAckChanged, true);
         Subs.CVar(_configManager, CVars.NetPvsAsync, OnAsyncChanged, true);
         Subs.CVar(_configManager, CVars.NetPvsCompressLevel, ResetParallelism, true);
+        Subs.CVar(_configManager, CVars.NetPvsDirtyBufferTicks, OnDirtyBufferChanged, true);
 
         _serverGameStateManager.ClientAck += OnClientAck;
         _serverGameStateManager.ClientRequestFull += OnClientRequestFull;
         _parallelMgr.ParallelCountChanged += ResetParallelism;
 
+        DirtyBufferSize = Math.Clamp(_configManager.GetCVar(CVars.NetPvsDirtyBufferTicks), 5, 120);
         InitializeDirty();
         InitializePvsArray();
     }
@@ -210,6 +214,7 @@ internal sealed partial class PvsSystem : EntitySystem
 
         // Compress & send the states.
         SendStates();
+        ProcessSendStates();
 
         // Cull deletion history
         AfterSerializeStates();
@@ -314,6 +319,8 @@ internal sealed partial class PvsSystem : EntitySystem
 
         // Process all entities in visible PVS chunks
         AddPvsChunks(session);
+
+        SerializePendingEntityStates(session);
 
 #if DEBUG
         VerifySessionData(session);
@@ -434,6 +441,8 @@ internal sealed partial class PvsSystem : EntitySystem
 
     internal void ProcessDisconnections()
     {
+        _sendTask?.WaitOne();
+        _sendTask = null;
         _leaveTask?.WaitOne();
         _leaveTask = null;
 

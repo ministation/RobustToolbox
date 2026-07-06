@@ -93,25 +93,20 @@ internal sealed partial class PvsSystem
 
         if (session.RequestedFull)
         {
-            var state = GetFullEntityState(session.Session, ent.Uid, ent.Meta);
-            session.States.Add(state);
+            QueueEntityState(session, ent.Uid, ent.Meta, entered: true, fullState: true, data.EntityLastAcked);
             return;
         }
 
         if (entered)
         {
-            var state = GetEntityState(session.Session, ent.Uid, data.EntityLastAcked, ent.Meta);
-            session.States.Add(state);
+            QueueEntityState(session, ent.Uid, ent.Meta, entered: true, fullState: false, data.EntityLastAcked);
             return;
         }
 
         if (meta.LastModifiedTick <= fromTick)
             return;
 
-        var entState = GetEntityState(session.Session, ent.Uid, fromTick , ent.Meta);
-
-        if (!entState.Empty)
-            session.States.Add(entState);
+        QueueEntityState(session, ent.Uid, ent.Meta, entered: false, fullState: false, fromTick);
     }
 
     /// <summary>
@@ -170,27 +165,50 @@ internal sealed partial class PvsSystem
 
         if (session.RequestedFull)
         {
-            var state = GetFullEntityState(session.Session, uid, meta);
-            session.States.Add(state);
+            QueueEntityState(session, uid, meta, entered: true, fullState: true, data.EntityLastAcked);
             return true;
         }
 
         if (entered)
         {
-            var state = GetEntityState(session.Session, uid, data.EntityLastAcked, meta);
-            session.States.Add(state);
+            QueueEntityState(session, uid, meta, entered: true, fullState: false, data.EntityLastAcked);
             return true;
         }
 
         if (meta.EntityLastModifiedTick <= fromTick)
             return true;
 
-        var entState = GetEntityState(session.Session, uid, fromTick , meta);
-
-        if (!entState.Empty)
-            session.States.Add(entState);
-
+        QueueEntityState(session, uid, meta, entered: false, fullState: false, fromTick);
         return true;
+    }
+
+    private void QueueEntityState(
+        PvsSession session,
+        EntityUid uid,
+        MetaDataComponent meta,
+        bool entered,
+        bool fullState,
+        GameTick stateFromTick)
+    {
+        session.PendingStates.Add(new PvsPendingEntityState(uid, meta, entered, fullState, stateFromTick));
+    }
+
+    private void SerializePendingEntityStates(PvsSession session)
+    {
+        if (session.PendingStates.Count == 0)
+            return;
+
+        foreach (var pending in session.PendingStates)
+        {
+            var state = pending.FullState
+                ? GetFullEntityState(session.Session, pending.Uid, pending.Meta)
+                : GetEntityState(session.Session, pending.Uid, pending.StateFromTick, pending.Meta);
+
+            if (pending.FullState || pending.Entered || !state.Empty)
+                session.States.Add(state);
+        }
+
+        session.PendingStates.Clear();
     }
 
     /// <summary>

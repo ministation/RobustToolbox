@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using Prometheus;
@@ -19,17 +20,38 @@ namespace Robust.Server.GameStates
         /// <summary>
         /// if it's a new entity we need to GetEntityState from tick 0.
         /// </summary>
-        private HashSet<EntityUid>[] _addEntities = new HashSet<EntityUid>[DirtyBufferSize];
-        private HashSet<EntityUid>[] _dirtyEntities = new HashSet<EntityUid>[DirtyBufferSize];
+        private HashSet<EntityUid>[] _addEntities = Array.Empty<HashSet<EntityUid>>();
+        private HashSet<EntityUid>[] _dirtyEntities = Array.Empty<HashSet<EntityUid>>();
         private int _currentIndex = 1;
+
+        private void OnDirtyBufferChanged(int value)
+        {
+            var size = Math.Clamp(value, 5, 120);
+            if (size == DirtyBufferSize && _addEntities.Length == size)
+                return;
+
+            DirtyBufferSize = size;
+            ResizeDirtyBuffer(size);
+        }
+
+        private void ResizeDirtyBuffer(int size)
+        {
+            var add = new HashSet<EntityUid>[size];
+            var dirty = new HashSet<EntityUid>[size];
+            for (var i = 0; i < size; i++)
+            {
+                add[i] = new HashSet<EntityUid>(32);
+                dirty[i] = new HashSet<EntityUid>(32);
+            }
+
+            _addEntities = add;
+            _dirtyEntities = dirty;
+            _currentIndex = ((int)_gameTiming.CurTick.Value + 1) % DirtyBufferSize;
+        }
 
         private void InitializeDirty()
         {
-            for (var i = 0; i < DirtyBufferSize; i++)
-            {
-                _addEntities[i] = new HashSet<EntityUid>(32);
-                _dirtyEntities[i] = new HashSet<EntityUid>(32);
-            }
+            ResizeDirtyBuffer(DirtyBufferSize);
             EntityManager.EntityAdded += OnEntityAdd;
             EntityManager.EntityDirtied += OnEntityDirty;
         }
