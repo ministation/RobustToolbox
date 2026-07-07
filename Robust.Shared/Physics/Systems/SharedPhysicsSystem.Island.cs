@@ -426,6 +426,9 @@ public abstract partial class SharedPhysicsSystem
                             var uidB = joint.BodyBUid;
                             DebugTools.AssertNotEqual(uidA, uidB);
 
+                            if (!PhysicsQuery.HasComponent(uidA) || !PhysicsQuery.HasComponent(uidB))
+                                continue;
+
                             if (JointQuery.TryGetComponent(uidA, out var jointCompA) &&
                                 jointCompA.Relay != null)
                             {
@@ -458,6 +461,9 @@ public abstract partial class SharedPhysicsSystem
                         var uidA = joint.BodyAUid;
                         var uidB = joint.BodyBUid;
 
+                        if (!PhysicsQuery.HasComponent(uidA) || !PhysicsQuery.HasComponent(uidB))
+                            continue;
+
                         if (JointQuery.TryGetComponent(uidA, out var jointCompA) &&
                             jointCompA.Relay != null)
                         {
@@ -479,8 +485,11 @@ public abstract partial class SharedPhysicsSystem
                 foreach (var (original, joint) in islandJoints)
                 {
                     // TODO: Same here store physicscomp + transform on the joint, the savings are worth it.
-                    var bodyA = PhysicsQuery.GetComponent(joint.BodyAUid);
-                    var bodyB = PhysicsQuery.GetComponent(joint.BodyBUid);
+                    if (!TryGetJointBodies(joint, out var bodyA, out var bodyB))
+                    {
+                        original.IslandFlag = false;
+                        continue;
+                    }
 
                     if (!bodyA.CanCollide || !bodyB.CanCollide)
                         continue;
@@ -806,10 +815,15 @@ public abstract partial class SharedPhysicsSystem
             for (var i = 0; i < island.Joints.Count; i++)
             {
                 var joint = island.Joints[i].Joint;
-                if (!joint.Enabled) continue;
+                if (!joint.Enabled)
+                    continue;
 
-                var bodyA = PhysicsQuery.GetComponent(joint.BodyAUid);
-                var bodyB = PhysicsQuery.GetComponent(joint.BodyBUid);
+                if (!TryGetJointIslandBodies(joint, island.Index, out var bodyA, out var bodyB))
+                {
+                    joint.Enabled = false;
+                    continue;
+                }
+
                 joint.InitVelocityConstraints(in data, in island, bodyA, bodyB, positions, angles, linearVelocities, angularVelocities);
             }
         }
@@ -1026,6 +1040,34 @@ public abstract partial class SharedPhysicsSystem
         ArrayPool<float>.Shared.Return(angles);
         ArrayPool<ContactVelocityConstraint>.Shared.Return(velocityConstraints);
         ArrayPool<ContactPositionConstraint>.Shared.Return(positionConstraints);
+    }
+
+    private bool TryGetJointBodies(Joint joint, out PhysicsComponent bodyA, out PhysicsComponent bodyB)
+    {
+        if (!PhysicsQuery.TryGetComponent(joint.BodyAUid, out var compA)
+            || !PhysicsQuery.TryGetComponent(joint.BodyBUid, out var compB))
+        {
+            bodyA = null!;
+            bodyB = null!;
+            return false;
+        }
+
+        bodyA = compA;
+        bodyB = compB;
+        return true;
+    }
+
+    private bool TryGetJointIslandBodies(
+        Joint joint,
+        int islandIndex,
+        out PhysicsComponent bodyA,
+        out PhysicsComponent bodyB)
+    {
+        if (!TryGetJointBodies(joint, out bodyA, out bodyB))
+            return false;
+
+        return bodyA.IslandIndex.ContainsKey(islandIndex)
+            && bodyB.IslandIndex.ContainsKey(islandIndex);
     }
 
     private void FinalisePositions(int start, int end, int offset, List<Entity<PhysicsComponent, TransformComponent>> bodies, Vector2[] positions, float[] angles, Vector2[] solvedPositions, float[] solvedAngles)
