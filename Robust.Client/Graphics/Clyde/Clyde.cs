@@ -115,6 +115,7 @@ namespace Robust.Client.Graphics.Clyde
             _proto.PrototypesReloaded += OnProtoReload;
 
             _cfg.OnValueChanged(CVars.DisplayOGLCheckErrors, b => _checkGLErrors = b, true);
+            _cfg.OnValueChanged(CVars.DisplayVSync, b => VsyncEnabled = b, true);
             _cfg.OnValueChanged(CVars.DisplayWindowMode, WindowModeChanged, true);
             _cfg.OnValueChanged(CVars.LightResolutionScale, LightResolutionScaleChanged, true);
             _cfg.OnValueChanged(CVars.MaxShadowcastingLights, MaxShadowcastingLightsChanged, true);
