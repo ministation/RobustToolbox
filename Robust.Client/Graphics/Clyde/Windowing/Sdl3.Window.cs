@@ -467,25 +467,23 @@ internal partial class Clyde
             var windowPtr = WinPtr(reg);
 
 #if WINDOWS
-            // On Windows, SwapBuffers does not correctly sync to the DWM compositor.
-            // This means OpenGL vsync is effectively broken by default on Windows.
-            // We manually sync via DwmFlush(). GLFW does this automatically, SDL3 does not.
+            // OpenGL vsync in windowed mode is unreliable on pre-Windows-8 systems when DWM composition
+            // is enabled. GLFW works around this with DwmFlush on Vista/7 only — not on Windows 8+.
+            // Using DwmFlush on modern Windows conflicts with the compositor and causes horizontal banding.
             //
-            // Windows DwmFlush logic partly taken from:
-            // https://github.com/love2d/love/blob/5175b0d1b599ea4c7b929f6b4282dd379fa116b8/src/modules/window/sdl/Window.cpp#L1018
-            // https://github.com/glfw/glfw/blob/d3ede7b6847b66cf30b067214b2b4b126d4c729b/src/wgl_context.c#L321-L340
-            // See also: https://github.com/libsdl-org/SDL/issues/5797
+            // See: https://github.com/libsdl-org/SDL/issues/5797
+            //      https://github.com/glfw/glfw/blob/master/src/wgl_context.c
 
-            var dwmFlush = false;
-            var swapInterval = 0;
+            var useDwmFlush = false;
+            var swapInterval = reg.SwapInterval;
 
-            if (!reg.Fullscreen && reg.SwapInterval > 0)
+            if (!reg.Fullscreen
+                && swapInterval > 0
+                && OperatingSystem.IsWindowsVersionAtLeast(6, 0)
+                && !OperatingSystem.IsWindowsVersionAtLeast(6, 2))
             {
                 BOOL compositing;
-                // 6.2 is Windows 8
-                // https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/ns-wdm-_osversioninfoexw
-                if (OperatingSystem.IsWindowsVersionAtLeast(6, 2)
-                    || Windows.SUCCEEDED(Windows.DwmIsCompositionEnabled(&compositing)) && compositing)
+                if (Windows.SUCCEEDED(Windows.DwmIsCompositionEnabled(&compositing)) && compositing)
                 {
                     var curCtx = SDL.SDL_GL_GetCurrentContext();
                     var curWin = SDL.SDL_GL_GetCurrentWindow();
@@ -494,23 +492,19 @@ internal partial class Clyde
                         throw new InvalidOperationException("Window context must be current!");
 
                     SDL.SDL_GL_SetSwapInterval(0);
-                    dwmFlush = true;
-                    swapInterval = reg.SwapInterval;
+                    useDwmFlush = true;
                 }
             }
 #endif
 
-            //_sawmill.Debug($"Swapping: {window.Id} @ {_clyde._gameTiming.CurFrame}");
             SDL.SDL_GL_SwapWindow(windowPtr);
 
 #if WINDOWS
-            if (dwmFlush)
+            if (useDwmFlush)
             {
-                var i = swapInterval;
-                while (i-- > 0)
-                {
+                var count = Math.Abs(swapInterval);
+                while (count-- > 0)
                     Windows.DwmFlush();
-                }
 
                 SDL.SDL_GL_SetSwapInterval(swapInterval);
             }
