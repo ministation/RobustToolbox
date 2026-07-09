@@ -62,6 +62,9 @@ namespace Robust.Shared.Localization
 
         public string GetString(string messageId)
         {
+            if (string.IsNullOrEmpty(messageId))
+                return string.Empty;
+
             if (_defaultCulture == null)
                 return messageId;
 
@@ -79,6 +82,9 @@ namespace Robust.Shared.Localization
 
         public string GetString(string messageId, (string, object) arg)
         {
+            if (string.IsNullOrEmpty(messageId))
+                return string.Empty;
+
             if (_defaultCulture == null)
                 return messageId;
 
@@ -92,6 +98,9 @@ namespace Robust.Shared.Localization
 
         public string GetString(string messageId, (string, object) arg1, (string, object) arg2)
         {
+            if (string.IsNullOrEmpty(messageId))
+                return string.Empty;
+
             if (_defaultCulture == null)
                 return messageId;
 
@@ -105,6 +114,9 @@ namespace Robust.Shared.Localization
 
         public string GetString(string messageId, params (string, object)[] args)
         {
+            if (string.IsNullOrEmpty(messageId))
+                return string.Empty;
+
             if (_defaultCulture == null)
                 return messageId;
 
@@ -127,6 +139,12 @@ namespace Robust.Shared.Localization
 
         public bool TryGetString(string messageId, [NotNullWhen(true)] out string? value)
         {
+            if (string.IsNullOrEmpty(messageId))
+            {
+                value = null;
+                return false;
+            }
+
             if (_defaultCulture == null)
             {
                 value = null;

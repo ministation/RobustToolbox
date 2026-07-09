@@ -17,7 +17,7 @@ namespace Robust.Client.UserInterface
 
         public object ProvideValue()
         {
-            return Loc.GetString(Key);
+            return string.IsNullOrEmpty(Key) ? string.Empty : Loc.GetString(Key);
         }
     }
 }
