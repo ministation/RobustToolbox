@@ -13,6 +13,7 @@ using Robust.Shared.Configuration;
 using Robust.Shared.ContentPack;
 using Robust.Shared.IoC;
 using Robust.Shared.Log;
+using Robust.Shared.Network.Transfer;
 using Robust.Shared.Player;
 using Robust.Shared.Profiling;
 using Robust.Shared.Serialization;
@@ -113,6 +114,7 @@ namespace Robust.Shared.Network
         [Dependency] private readonly ProfManager _prof = default!;
         [Dependency] private readonly HttpClientHolder _http = default!;
         [Dependency] private readonly IHWId _hwId = default!;
+        [Dependency] private readonly ITransferManager _transfer = default!;
         [Dependency] private readonly IResourceManager _resource = default!;
 
         /// <summary>
@@ -149,12 +151,18 @@ namespace Robust.Shared.Network
         private ISawmill _loggerPacket = default!;
         private ISawmill _authLogger = default!;
 
+        private bool _clientSerializerComplete;
+        private bool _clientTransferComplete;
+        private bool _clientResetPending;
+
         /// <inheritdoc />
         public int Port => _config.GetCVar(CVars.NetPort);
 
         public bool IsAuthEnabled => _config.GetCVar<bool>("auth.enabled");
 
         public IReadOnlyDictionary<Type, long> MessageBandwidthUsage => _bandwidthUsage;
+
+        internal StringTable StringTable => _strings;
 
         /// <inheritdoc />
         public bool IsServer { get; private set; }
@@ -281,6 +289,7 @@ namespace Robust.Shared.Network
             _strings.Initialize(() => { _logger.Info("Message string table loaded."); },
                 UpdateNetMessageFunctions);
             _serializer.ClientHandshakeComplete += OnSerializerOnClientHandshakeComplete;
+            _transfer.ClientHandshakeComplete += OnTransferOnClientHandshakeComplete;
 
             _initialized = true;
 
@@ -332,7 +341,21 @@ namespace Robust.Shared.Network
         private void OnSerializerOnClientHandshakeComplete()
         {
             _logger.Info("Client completed serializer handshake.");
-            OnConnected(ServerChannelImpl!);
+            _clientSerializerComplete = true;
+            ClientCheckSwitchToConnected();
+        }
+
+        private void OnTransferOnClientHandshakeComplete()
+        {
+            _logger.Info("Client completed transfer handshake.");
+            _clientTransferComplete = true;
+            ClientCheckSwitchToConnected();
+        }
+
+        private void ClientCheckSwitchToConnected()
+        {
+            if (_clientSerializerComplete && _clientTransferComplete)
+                OnConnected(ServerChannelImpl!);
         }
 
         private void SynchronizeNetTime()
@@ -426,6 +449,10 @@ namespace Robust.Shared.Network
 
         public void Reset(string reason)
         {
+            _logger.Info($"Resetting NetManager: {reason}");
+
+            _clientResetPending = false;
+
             foreach (var kvChannel in _channels)
             {
                 DisconnectChannel(kvChannel.Value, reason);
@@ -455,6 +482,9 @@ namespace Robust.Shared.Network
 
             _cancelConnectTokenSource?.Cancel();
             ClientConnectState = ClientConnectionState.NotConnecting;
+
+            _clientSerializerComplete = false;
+            _clientTransferComplete = false;
         }
 
         /// <inheritdoc />
@@ -609,6 +639,9 @@ namespace Robust.Shared.Network
             MessagesUnsentMetrics.Set(unsent);
             MessagesStoredMetrics.Set(stored);
             */
+
+            if (_clientResetPending)
+                Reset("Channel closed");
         }
 
         /// <inheritdoc />
@@ -845,7 +878,9 @@ namespace Robust.Shared.Network
 
             try
             {
-                await _serializer.Handshake(channel);
+                await Task.WhenAll(
+                    _serializer.Handshake(channel),
+                    _transfer.ServerHandshake(channel));
             }
             catch (TaskCanceledException)
             {
@@ -888,14 +923,7 @@ namespace Robust.Shared.Network
 #endif
 
             if (IsClient)
-            {
-                connection.Peer.Shutdown(reason);
-                _toCleanNetPeers.Add(connection.Peer);
-                _strings.Reset();
-
-                _cancelConnectTokenSource?.Cancel();
-                ClientConnectState = ClientConnectionState.NotConnecting;
-            }
+                _clientResetPending = true;
         }
 
         /// <inheritdoc />
@@ -956,7 +984,8 @@ namespace Robust.Shared.Network
                 if (ShouldLogPacketIssue("unexpected-before-handshake"))
                     _logger.Debug($"{msg.SenderConnection.RemoteEndPoint}: Got unexpected data packet before handshake completion.");
 
-                msg.SenderConnection.Disconnect("Unexpected packet before handshake completion");
+
+                msg.SenderConnection.Disconnect("Unexpected packet before handshake completion", false);
                 return true;
             }
 
@@ -993,7 +1022,7 @@ namespace Robust.Shared.Network
                 if (ShouldLogPacketIssue($"invalid-message-id:{id}"))
                     _logger.Warning($"{msg.SenderConnection.RemoteEndPoint}: Got net message with invalid ID {id}.");
 
-                channel.Disconnect("Got NetMessage with invalid ID");
+                channel.Disconnect("Got NetMessage with invalid ID", false);
                 return true;
             }
 
@@ -1004,7 +1033,7 @@ namespace Robust.Shared.Network
                 if (ShouldLogPacketIssue($"non-handshake-before-complete:{entry.Type.Name}"))
                     _logger.Warning($"{msg.SenderConnection.RemoteEndPoint}: Got non-handshake message {entry.Type.Name} before handshake completion.");
 
-                channel.Disconnect("Got unacceptable net message before handshake completion");
+                channel.Disconnect("Got unacceptable net message before handshake completion", false);
                 return true;
             }
 
