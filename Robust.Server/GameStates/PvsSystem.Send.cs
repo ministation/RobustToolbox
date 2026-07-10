@@ -64,42 +64,47 @@ internal sealed partial class PvsSystem
     {
         DebugTools.AssertEqual(data.State, null);
 
-        // PVS benchmarks use dummy sessions.
-        // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
-        if (data.Session.Channel is not DummyChannel)
+        try
         {
-            DebugTools.AssertNotEqual(data.StateStream, null);
-            var msg = new MsgState
+            // PVS benchmarks use dummy sessions.
+            // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
+            if (data.Session.Channel is not DummyChannel)
             {
-                StateStream = data.StateStream,
-                ForceSendReliably = data.ForceSendReliably,
-                CompressionContext = ctx
-            };
+                DebugTools.AssertNotEqual(data.StateStream, null);
+                var msg = new MsgState
+                {
+                    StateStream = data.StateStream,
+                    ForceSendReliably = data.ForceSendReliably,
+                    CompressionContext = ctx
+                };
 
-            _netMan.ServerSendMessage(msg, data.Session.Channel);
-            if (msg.ShouldSendReliably())
+                _netMan.ServerSendMessage(msg, data.Session.Channel);
+                if (msg.ShouldSendReliably())
+                {
+                    data.RequestedFull = false;
+                    data.LastReceivedAck = data.StateToTick;
+                    lock (PendingAcks)
+                    {
+                        PendingAcks.Add(data.Session);
+                    }
+                }
+            }
+            else
             {
-                data.RequestedFull = false;
+                // Always "ack" dummy sessions.
                 data.LastReceivedAck = data.StateToTick;
+                data.RequestedFull = false;
                 lock (PendingAcks)
                 {
                     PendingAcks.Add(data.Session);
                 }
             }
         }
-        else
+        finally
         {
-            // Always "ack" dummy sessions.
-            data.LastReceivedAck = data.StateToTick;
-            data.RequestedFull = false;
-            lock (PendingAcks)
-            {
-                PendingAcks.Add(data.Session);
-            }
+            data.StateStream?.Dispose();
+            data.StateStream = null;
         }
-
-        data.StateStream?.Dispose();
-        data.StateStream = null;
     }
 
     private record struct PvsSendJob(PvsSystem Pvs) : IParallelRobustJob

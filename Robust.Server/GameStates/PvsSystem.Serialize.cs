@@ -71,6 +71,7 @@ internal sealed partial class PvsSystem
         // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
         if (data.Session.Channel is not DummyChannel)
         {
+            data.StateStream?.Dispose();
             data.StateStream = RobustMemoryManager.GetMemoryStream();
             _serializer.SerializeDirect(data.StateStream, data.State);
         }

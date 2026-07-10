@@ -240,6 +240,8 @@ internal sealed partial class PvsSystem
 
     private static void FreeSessionDataMemory(PvsSession session)
     {
+        session.StateStream?.Dispose();
+        session.StateStream = null;
         session.DataMemory.Dispose();
     }
 
