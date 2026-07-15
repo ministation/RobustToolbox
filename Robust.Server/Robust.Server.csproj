@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <Import Project="..\MSBuild\Robust.Engine.props" />
   <PropertyGroup>
     <IsPackable>false</IsPackable>
@@ -30,7 +30,7 @@
     <PackageReference Include="SpaceWizards.Sodium" PrivateAssets="compile" />
     <PackageReference Include="SharpZstd.Interop" PrivateAssets="compile" ExcludeAssets="native" />
     <PackageReference Include="Robust.Natives.Zstd" />
-    <PackageReference Condition="'$(RobustToolsBuild)' == 'True'" Include="JetBrains.Profiler.Api" />
+    <PackageReference Include="JetBrains.Profiler.Api" />
     <PackageReference Include="Microsoft.NET.ILLink.Tasks" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" />

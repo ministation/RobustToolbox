@@ -779,7 +779,8 @@ namespace Robust.Shared.Network
             {
                 _awaitingStatusChange.Remove(sender);
                 resume.Item1.Dispose();
-                resume.Item2.SetResult(reason);
+                // May already be canceled by AwaitStatusChange's CancellationToken callback.
+                resume.Item2.TrySetResult(reason);
                 return;
             }
 

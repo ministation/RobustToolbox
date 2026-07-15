@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <Import Project="..\MSBuild\Robust.Engine.props" />
   <PropertyGroup>
     <IsPackable>false</IsPackable>
@@ -23,7 +23,7 @@
     <PackageReference Include="SpaceWizards.Sdl" PrivateAssets="compile" />
     <PackageReference Include="Robust.Natives" />
     <PackageReference Include="TerraFX.Interop.Windows" PrivateAssets="compile" />
-    <PackageReference Condition="'$(RobustToolsBuild)' == 'True'" Include="JetBrains.Profiler.Api" PrivateAssets="compile" />
+    <PackageReference Condition="'$(RobustToolsBuild)' == 'true'" Include="JetBrains.Profiler.Api" PrivateAssets="compile" />
     <PackageReference Include="SpaceWizards.Sodium" PrivateAssets="compile" />
     <PackageReference Include="Microsoft.NET.ILLink.Tasks" />
     <PackageReference Include="TerraFX.Interop.Xlib" />
@@ -52,7 +52,7 @@
     <ProjectReference Include="..\Robust.Shared\Robust.Shared.csproj" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(RobustToolsBuild)' == 'True'">
+  <ItemGroup Condition="'$(RobustToolsBuild)' == 'true'">
     <ProjectReference Include="..\Robust.Xaml\Robust.Xaml.csproj" />
   </ItemGroup>
 
