@@ -11,6 +11,13 @@ using Robust.Shared.Network;
 namespace Robust.Shared.Player;
 
 /// <summary>
+/// Marks a test-only network channel that cannot send real network messages.
+/// </summary>
+public interface IDummyChannel : INetChannel
+{
+}
+
+/// <summary>
 /// This is a mock session for use with integration tests and benchmarks. It uses a <see cref="DummyChannel"/> as
 /// its <see cref="INetChannel"/>, which doesn't support actually sending any messages.
 /// </summary>
@@ -82,7 +89,7 @@ internal sealed class DummySession : ICommonSessionInternal
 /// <summary>
 /// A mock NetChannel for use in integration tests and benchmarks.
 /// </summary>
-internal sealed class DummyChannel(DummySession session) : INetChannel
+internal sealed class DummyChannel(DummySession session) : IDummyChannel
 {
     public readonly DummySession Session = session;
     public NetUserData UserData => Session.UserData;
