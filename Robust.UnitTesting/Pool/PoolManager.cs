@@ -292,7 +292,18 @@ we are just going to end this here to save a lot of time. This is the exception 
 
             TextWriter? gravestone = null;
             if (context is NUnitTestContextWrap)
-                gravestone = File.CreateText($"{TestContext.CurrentContext.WorkDirectory}/gravestone-{id}.txt");
+            {
+                // WorkDirectory throws if accessed outside a real NUnit assembly build
+                // (e.g. YAMLLinter with a wrongly-wrapped context).
+                try
+                {
+                    gravestone = File.CreateText($"{TestContext.CurrentContext.WorkDirectory}/gravestone-{id}.txt");
+                }
+                catch (InvalidOperationException)
+                {
+                    // No gravestone outside NUnit — pair still works.
+                }
+            }
 
             await pair.Init(id, this, settings, testOut, gravestone);
             pair.Use();
