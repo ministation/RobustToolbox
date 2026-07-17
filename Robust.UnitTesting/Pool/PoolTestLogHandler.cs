@@ -86,6 +86,15 @@ public sealed class PoolTestLogHandler : ILogHandler
         _failingLogs.Clear();
     }
 
+    /// <summary>
+    /// Clears any recorded failing logs. Intended for tests that intentionally log errors
+    /// (e.g. to verify the failure-reporting machinery) and don't want to fail on pair return.
+    /// </summary>
+    public void ClearFailingLogs()
+    {
+        _failingLogs.Clear();
+    }
+
     public void ActivateContext(TextWriter context)
     {
         _stopwatch.Restart();
