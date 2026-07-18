@@ -114,6 +114,7 @@ namespace Robust.Client
             deps.Register<ILocalizationManagerInternal, ClientLocalizationManager>();
             deps.Register<LoadingScreenManager>();
             deps.Register<ILoadingScreenManager, LoadingScreenManager>();
+            deps.Register<IGameServerStatusClient, GameServerStatusClient>();
 
             switch (mode)
             {
