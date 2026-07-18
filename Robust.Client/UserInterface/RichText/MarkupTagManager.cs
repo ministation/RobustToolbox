@@ -83,8 +83,10 @@ public sealed class MarkupTagManager
     public bool TryGetMarkupTagHandler(string name, Type[]? tagsAllowed, [NotNullWhen(true)] out IMarkupTagHandler? handler)
     {
         if (_markupTagTypes.TryGetValue(name, out var markupTag)
-            // Using a whitelist prevents new tags from sneaking in.
-            && (tagsAllowed == null || Array.IndexOf(tagsAllowed, markupTag.GetType()) != -1))
+            && (tagsAllowed == null
+                || Array.IndexOf(tagsAllowed, markupTag.GetType()) != -1
+                // Content may replace engine handlers (e.g. UiFontTag for "font") while whitelists still list FontTag.
+                || EngineTagWhitelisted(tagsAllowed, markupTag)))
         {
             handler = markupTag;
             return true;
@@ -92,6 +94,13 @@ public sealed class MarkupTagManager
 
         handler = null;
         return false;
+    }
+
+    private static bool EngineTagWhitelisted(Type[] tagsAllowed, IMarkupTagHandler markupTag)
+    {
+        // Font is the only engine tag Mini currently replaces (UiFontTag).
+        return Array.IndexOf(tagsAllowed, typeof(FontTag)) != -1
+               && markupTag.Name.Equals("font", StringComparison.OrdinalIgnoreCase);
     }
 
     [Obsolete("Use TryGetMarkupTagHandler")]
