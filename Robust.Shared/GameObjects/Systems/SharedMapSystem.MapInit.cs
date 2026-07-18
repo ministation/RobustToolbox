@@ -56,7 +56,12 @@ public abstract partial class SharedMapSystem
             SetPaused(map, false);
     }
 
-    internal void RecursiveMapInit(EntityUid entity)
+    /// <summary>
+    /// Runs <see cref="EntityManager.RunMapInit"/> on <paramref name="entity"/> and all descendants
+    /// that are not yet map-initialized. Safe to call after loading a post-init grid onto an
+    /// already-initialized map (e.g. shuttle templates saved with <c>mapInit: true</c>).
+    /// </summary>
+    public void RecursiveMapInit(EntityUid entity)
     {
         var toInitialize = new List<EntityUid> {entity};
         for (var i = 0; i < toInitialize.Count; i++)
