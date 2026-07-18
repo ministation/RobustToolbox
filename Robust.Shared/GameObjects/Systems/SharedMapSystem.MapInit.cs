@@ -66,10 +66,15 @@ public abstract partial class SharedMapSystem
             if(!_metaQuery.TryComp(uid, out var meta))
                 continue;
 
+            // Always walk children first. Post-init parents (mapInit: true in YAML) used to
+            // skip their subtrees entirely, so pre-init airlocks / vendors / StorageFill under a
+            // map-initialized grid never received MapInitEvent (empty door boards → no access).
+            if (_xformQuery.TryComp(uid, out var xform))
+                toInitialize.AddRange(xform._children);
+
             if (meta.EntityLifeStage == EntityLifeStage.MapInitialized)
                 continue;
 
-            toInitialize.AddRange(Transform(uid)._children);
             EntityManager.RunMapInit(uid, meta);
         }
     }
