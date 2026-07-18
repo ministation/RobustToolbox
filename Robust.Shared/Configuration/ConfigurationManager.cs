@@ -531,9 +531,24 @@ namespace Robust.Shared.Configuration
 
         public void LoadCVarsFromAssembly(Assembly assembly)
         {
-            foreach (var type in assembly
-                         .GetTypes()
-                         .Where(p => Attribute.IsDefined(p, typeof(CVarDefsAttribute))))
+            // GetTypes() throws if optional deps (e.g. Robust.Shared.Scripting) are missing.
+            Type[] types;
+            try
+            {
+                types = assembly.GetTypes();
+            }
+            catch (ReflectionTypeLoadException e)
+            {
+                types = e.Types.Where(t => t != null).Cast<Type>().ToArray();
+                var sawmill = _logManager.GetSawmill("cfg");
+                foreach (var loaderException in e.LoaderExceptions)
+                {
+                    if (loaderException != null)
+                        sawmill.Warning($"Skipping unloadable type while loading CVars from {assembly.GetName().Name}: {loaderException.Message}");
+                }
+            }
+
+            foreach (var type in types.Where(p => Attribute.IsDefined(p, typeof(CVarDefsAttribute))))
             {
                 LoadCVarsFromType(type);
             }
