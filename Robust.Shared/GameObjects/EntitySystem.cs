@@ -184,6 +184,10 @@ namespace Robust.Shared.GameObjects
         /// <param name="session">The session to send the event to.</param>
         protected void RaiseNetworkEvent(EntityEventArgs message, ICommonSession session)
         {
+            // Skip disconnected clients — rotting corpses / async TTS used to spam net errors otherwise.
+            if (!session.Channel.IsConnected)
+                return;
+
             EntityManager.EntityNetManager?.SendSystemNetworkMessage(message, session.Channel);
         }
 
@@ -200,6 +204,9 @@ namespace Robust.Shared.GameObjects
 
             foreach (var session in filter.Recipients)
             {
+                if (!session.Channel.IsConnected)
+                    continue;
+
                 EntityManager.EntityNetManager?.SendSystemNetworkMessage(message, session.Channel);
             }
         }
@@ -211,7 +218,7 @@ namespace Robust.Shared.GameObjects
         /// <param name="recipient">The entity to look up a session to send to on.</param>
         protected void RaiseNetworkEvent(EntityEventArgs message, EntityUid recipient)
         {
-            if (_playerMan.TryGetSessionByEntity(recipient, out var session))
+            if (_playerMan.TryGetSessionByEntity(recipient, out var session) && session.Channel.IsConnected)
                 EntityManager.EntityNetManager?.SendSystemNetworkMessage(message, session.Channel);
         }
 

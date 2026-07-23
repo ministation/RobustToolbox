@@ -57,8 +57,9 @@ public sealed partial class NetManager
     {
         if (!channel.IsConnected)
         {
-            _logger.Error(
-                $"Tried to send message \"{message}\" to disconnected channel {channel}\n{Environment.StackTrace}");
+            // Common during disconnect / ghost transfer / rotting corpses still attached to a stale session.
+            // Do not log Error + StackTrace — that floods logs and stalls the main loop.
+            _logger.Verbose($"Skipped message \"{message}\" to disconnected channel {channel}");
             return;
         }
 
