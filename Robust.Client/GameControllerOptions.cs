@@ -8,7 +8,10 @@ namespace Robust.Client
         /// <summary>
         ///     Whether content sandboxing will be enabled & enforced.
         /// </summary>
-        public bool Sandboxing { get; init; } = true;
+        // Mini edit: default off. Our client builds only ever load our own trusted assemblies, and
+        // RT 289's ILVerify NREs (AssemblyTypeChecker.DoVerifyIL) on CI-built assemblies, killing
+        // every client at startup. The server already defaults to sandboxing disabled.
+        public bool Sandboxing { get; init; } = false;
 
         // TODO: Expose mounting methods to games using Robust as a library.
         /// <summary>
