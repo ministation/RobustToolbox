@@ -43,7 +43,10 @@ internal sealed partial class PvsSystem : EntitySystem
 
     // TODO make this a cvar. Make it in terms of seconds and tie it to tick rate?
     // Main issue is that I CBF figuring out the logic for handling it changing mid-game.
-    public const int DirtyBufferSize = 20;
+    // Mini: configurable via net.pvs_dirty_buffer_ticks (read once at startup, restart to apply).
+    // Clients with ping higher than buffer/tickrate get every entity treated as a fresh PVS
+    // entry, which overwhelms the PVS budget and floods them with states.
+    public static int DirtyBufferSize { get; private set; } = 20;
     // Note: If a client has ping higher than TickBuffer / TickRate, then the server will treat every entity as if it
     // had entered PVS for the first time. Note that due to the PVS budget, this buffer is easily overwhelmed.
 
@@ -154,6 +157,8 @@ internal sealed partial class PvsSystem : EntitySystem
         _serverGameStateManager.ClientRequestFull += OnClientRequestFull;
         _parallelMgr.ParallelCountChanged += ResetParallelism;
 
+        // Mini: honor net.pvs_dirty_buffer_ticks before buffers are sized.
+        DirtyBufferSize = Math.Clamp(_configManager.GetCVar(CVars.NetPvsDirtyBufferTicks), 5, 120);
         InitializeDirty();
         InitializePvsArray();
     }

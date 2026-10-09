@@ -121,8 +121,14 @@ public sealed partial class NetManager
         if (result is not (NetSendResult.Sent or NetSendResult.Queued))
         {
             // Logging stack trace here won't be useful as it'll likely be thread pooled on production scenarios.
-            item.Owner._logger.Warning(
-                $"Failed to send message {item.RobustMessage} to {channel} via Lidgren: {result}");
+            // Mini: Dropped is flow control (congested client) during PVS storms, not an error —
+            // log at Debug so it does not spam; keep Warning for real failures.
+            if (result == NetSendResult.Dropped)
+                item.Owner._logger.Debug(
+                    $"Failed to send message {item.RobustMessage} to {channel} via Lidgren: {result}");
+            else
+                item.Owner._logger.Warning(
+                    $"Failed to send message {item.RobustMessage} to {channel} via Lidgren: {result}");
         }
     }
 

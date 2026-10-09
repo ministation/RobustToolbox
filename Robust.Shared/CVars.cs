@@ -281,6 +281,14 @@ namespace Robust.Shared
             CVarDef.Create("net.pvs_async", true, CVar.ARCHIVE | CVar.SERVERONLY);
 
         /// <summary>
+        /// Mini: number of ticks of dirty-entity history used when building per-client game states.
+        /// Clients with ping higher than buffer/tickrate get every entity treated as a fresh PVS
+        /// entry, overwhelming the PVS budget. Read once at startup; restart to apply.
+        /// </summary>
+        public static readonly CVarDef<int> NetPvsDirtyBufferTicks =
+            CVarDef.Create("net.pvs_dirty_buffer_ticks", 20, CVar.ARCHIVE | CVar.SERVERONLY);
+
+        /// <summary>
         /// View size to take for PVS calculations, as the size of the sides of a square centered on the view points of
         /// clients. See also <see cref="NetPvsPriorityRange"/>.
         /// </summary>
