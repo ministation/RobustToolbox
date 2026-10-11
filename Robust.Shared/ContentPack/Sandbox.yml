@@ -25,6 +25,12 @@ WhitelistedNamespaces:
 - Robust
 - Content
 - OpenDreamShared
+# Mini: voice chat (Content.Goobstation.Client/Voice) uses raw Lidgren networking,
+# NAudio mic capture and the Concentus opus codec — without these the packaged
+# client fails the typecheck and crashes on connect.
+- Lidgren
+- NAudio
+- Concentus
 
 AllowedAssemblyPrefixes:
 - OpenDream
@@ -1147,6 +1153,7 @@ Types:
     BitConverter: { All: True } # None of these APIs can do anything more complex than make funny looking NaNs and hex strings.
     Base64FormattingOptions: { } # Enum
     Boolean: { All: True }
+    Buffer: { All: True } # Mini: voice chat PCM copy (Buffer.BlockCopy)
     Byte: { All: True }
     Char: { All: True }
     CharEnumerator: { All: True }
