@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using Prometheus;
@@ -19,12 +20,16 @@ namespace Robust.Server.GameStates
         /// <summary>
         /// if it's a new entity we need to GetEntityState from tick 0.
         /// </summary>
-        private HashSet<EntityUid>[] _addEntities = new HashSet<EntityUid>[DirtyBufferSize];
-        private HashSet<EntityUid>[] _dirtyEntities = new HashSet<EntityUid>[DirtyBufferSize];
+        // Mini: sized in InitializeDirty, after net.pvs_dirty_buffer_ticks is applied.
+        private HashSet<EntityUid>[] _addEntities = Array.Empty<HashSet<EntityUid>>();
+        private HashSet<EntityUid>[] _dirtyEntities = Array.Empty<HashSet<EntityUid>>();
         private int _currentIndex = 1;
 
         private void InitializeDirty()
         {
+            _addEntities = new HashSet<EntityUid>[DirtyBufferSize];
+            _dirtyEntities = new HashSet<EntityUid>[DirtyBufferSize];
+
             for (var i = 0; i < DirtyBufferSize; i++)
             {
                 _addEntities[i] = new HashSet<EntityUid>(32);

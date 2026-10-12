@@ -280,6 +280,18 @@ namespace Robust.Shared
             CVarDef.Create("net.pvs", true, CVar.ARCHIVE | CVar.REPLICATED | CVar.SERVER);
 
         /// <summary>
+        /// Mini: number of ticks of dirty-entity history used when building per-client game states.
+        /// A client whose acknowledgements lag further behind than this window gets every entity
+        /// treated as a fresh PVS entry, which overflows the PVS budget, delivers partial states
+        /// (entities without metadata) and makes clients request full states — the whole map is then
+        /// resent to them. At 30 TPS the upstream constant of 20 ticks is only ~0.67 s, which a single
+        /// main-thread stall (map preload, Lavaland, grid FTL) already exceeds for every client.
+        /// Read once at startup; restart to apply.
+        /// </summary>
+        public static readonly CVarDef<int> NetPvsDirtyBufferTicks =
+            CVarDef.Create("net.pvs_dirty_buffer_ticks", 20, CVar.ARCHIVE | CVar.SERVERONLY);
+
+        /// <summary>
         /// Size increments for the automatic growth of Pvs' entity data storage. 0 will increase it by factors of 2
         /// </summary>
         public static readonly CVarDef<int> NetPvsEntityGrowth =

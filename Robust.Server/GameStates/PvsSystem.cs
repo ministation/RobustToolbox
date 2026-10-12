@@ -42,9 +42,12 @@ internal sealed partial class PvsSystem : EntitySystem
     [Dependency] private IServerReplayRecordingManager _replay = default!;
     [Dependency] private SharedMapSystem _maps = default!;
 
-    // TODO make this a cvar. Make it in terms of seconds and tie it to tick rate?
-    // Main issue is that I CBF figuring out the logic for handling it changing mid-game.
-    public const int DirtyBufferSize = 20;
+    // TODO make this in terms of seconds and tie it to tick rate?
+    // Mini: configurable via net.pvs_dirty_buffer_ticks (read once at startup, restart to apply).
+    // Clients whose acks fall further behind than buffer/tickrate get every entity treated as a fresh
+    // PVS entry, which overwhelms the PVS budget and floods them with partial states (missing metadata
+    // -> full state requests -> whole-map resends). 20 ticks is only 0.67 s at 30 TPS.
+    public static int DirtyBufferSize { get; private set; } = 20;
 
     private static readonly TimeSpan FullStateRequestCooldown = TimeSpan.FromSeconds(1);
     // Note: If a client has ping higher than TickBuffer / TickRate, then the server will treat every entity as if it
@@ -160,6 +163,8 @@ internal sealed partial class PvsSystem : EntitySystem
         _serverGameStateManager.ClientRequestFull += OnClientRequestFull;
         _parallelMgr.ParallelCountChanged += ResetParallelism;
 
+        // Mini: honor net.pvs_dirty_buffer_ticks before the buffers are sized.
+        DirtyBufferSize = Math.Clamp(_configManager.GetCVar(CVars.NetPvsDirtyBufferTicks), 5, 120);
         InitializeDirty();
         InitializePvsArray();
     }
