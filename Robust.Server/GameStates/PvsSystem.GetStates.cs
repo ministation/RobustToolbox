@@ -20,8 +20,15 @@ internal sealed partial class PvsSystem
     /// <param name="entityUid">Uid of the entity to generate the state from.</param>
     /// <param name="fromTick">Only provide delta changes from this tick.</param>
     /// <param name="meta">The entity's metadata component</param>
+    /// <param name="ensureMetadata">
+    /// Mini: always include the metadata component, even if it was not modified since <paramref name="fromTick"/>.
+    /// Used for entities that are (re-)entering a client's PVS: the client may have dropped the entity locally without
+    /// the server ever finding out (e.g. a broken entity got deleted, content deleted it while applying state), in
+    /// which case the server still believes the entity was acked. Without metadata the client cannot re-create the
+    /// entity and throws <c>MissingMetadataException</c>, which aborts the whole tick's state application.
+    /// </param>
     /// <returns>New entity State for the given entity.</returns>
-    private EntityState GetEntityState(ICommonSession? player, EntityUid entityUid, GameTick fromTick, MetaDataComponent meta)
+    private EntityState GetEntityState(ICommonSession? player, EntityUid entityUid, GameTick fromTick, MetaDataComponent meta, bool ensureMetadata = false)
     {
         var changed = GetComponentChangeList(meta.NetComponents.Count);
 
@@ -42,7 +49,10 @@ internal sealed partial class PvsSystem
             if (component.SendOnlyToOwner && player != null && player.AttachedEntity != entityUid)
                 continue;
 
-            if (component.LastModifiedTick <= fromTick)
+            // Mini: never send a state that can be used to create an entity client-side without its metadata.
+            var forceMetadata = ensureMetadata && component is MetaDataComponent;
+
+            if (component.LastModifiedTick <= fromTick && !forceMetadata)
             {
                 if (sendCompList && (!component.SessionSpecific || player == null || EntityManager.CanGetComponentState(component, player)))
                     netComps!.Add(netId);

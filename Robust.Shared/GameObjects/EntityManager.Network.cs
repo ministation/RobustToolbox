@@ -21,7 +21,12 @@ public partial class EntityManager
     /// Clears an old inverse lookup for a particular entityuid.
     /// Do not call this unless you are sure of what you're doing.
     /// </summary>
-    internal void ClearNetEntity(NetEntity netEntity)
+    /// <remarks>
+    /// Mini: public so the client can drop mappings that point at entities which no longer exist (stale/broken
+    /// entities). Without this, every later state for such a net entity keeps resolving to a dead entity and the
+    /// client cannot re-create it.
+    /// </remarks>
+    public void ClearNetEntity(NetEntity netEntity)
     {
         NetEntityLookup.Remove(netEntity);
     }
