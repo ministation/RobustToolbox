@@ -1,4 +1,4 @@
-﻿// ReSharper disable once RedundantUsingDirective
+// ReSharper disable once RedundantUsingDirective
 // Used in EXCEPTION_TOLERANCE preprocessor
 using System;
 using System.Collections.Generic;
@@ -154,6 +154,12 @@ namespace Robust.Client.GameStates
         private bool _resettingPredictedEntities;
         private readonly List<EntityUid> _brokenEnts = new();
 
+        /// <summary>
+        /// Mini: entities the server sent without metadata, so they could not be created. Used to avoid log spam while
+        /// such an entity keeps being sent; cleared whenever a full state is applied.
+        /// </summary>
+        private readonly HashSet<NetEntity> _missingMetadataEnts = new();
+
         /// <inheritdoc />
         public void Initialize()
         {
@@ -240,6 +246,7 @@ namespace Robust.Client.GameStates
             _timing.LastRealTick = GameTick.Zero;
             _lastProcessedInput = 0;
             _detachedChunkEntities.Clear();
+            _missingMetadataEnts.Clear();
         }
 
         private void OnEntitySystemLoaded(object? sender, SystemChangedArgs args)
@@ -1051,11 +1058,11 @@ namespace Robust.Client.GameStates
             using (_prof.Group("Create uninitialized entities"))
             {
                 var created = 0;
+                var requestedFull = false;
                 foreach (var es in curSpan)
                 {
-                    if (_entities.TryGetEntityData(es.NetEntity, out var uid, out var meta))
+                    if (_entities.TryGetEntityData(es.NetEntity, out var uid, out var meta) && _entities.EntityExists(uid))
                     {
-                        DebugTools.Assert(_entities.EntityExists(uid));
                         _resolvedEntityStates.Add((es, uid.Value, meta));
 
                         // Existing entities in a full state still need their implicit prototype state merged into the full-rep cache.
@@ -1065,8 +1072,43 @@ namespace Robust.Client.GameStates
                         continue;
                     }
 
+                    if (uid != null)
+                    {
+                        // Mini: the net-entity lookup points at an entity that no longer exists. It was deleted
+                        // client-side (broken entity, content deletion while applying state, ...) without the server
+                        // ever finding out. Drop the stale mapping and let the state below re-create the entity,
+                        // otherwise every later state for it fails on missing components and used to abort the
+                        // entire state application (e.g. KeyNotFoundException in Detach).
+                        _sawmill.Warning($"Dropping stale net entity mapping for {es.NetEntity}: entity {uid} no longer exists.");
+                        _entities.ClearNetEntity(es.NetEntity);
+                    }
+
                     created++;
-                    CreateNewEntity(es, curState.ToSequence);
+                    try
+                    {
+                        CreateNewEntity(es, curState.ToSequence);
+                    }
+                    catch (MissingMetadataException e)
+                    {
+                        // Mini: a single entity without metadata used to abort the whole tick, leaving freshly created
+                        // entities uninitialized and the rest of the message unapplied. Skip the entity and ask for a
+                        // full state instead, which resets both the client's entities and the server's ack history.
+                        if (_missingMetadataEnts.Add(e.NetEntity))
+                        {
+                            _sawmill.Error($"Server state is missing the metadata component for a new entity: {e.NetEntity}. Skipping it and requesting a full server state.");
+                        }
+                        else
+                        {
+                            _sawmill.Debug($"Server state is still missing the metadata component for entity {e.NetEntity}, skipping it.");
+                        }
+
+                        // Don't spam the server: one request per state message is enough, it rate-limits them anyway.
+                        if (!requestedFull)
+                        {
+                            requestedFull = true;
+                            RequestFullState(e.NetEntity);
+                        }
+                    }
                 }
 
                 _prof.WriteValue("Count", ProfData.Int32(created));
@@ -1272,7 +1314,13 @@ namespace Robust.Client.GameStates
             // Now that things like collision data, fixtures, and positions have been updated, we queue a
             // broadphase update. However, if this entity is parented to some other entity also re-entering PVS,
             // we only need to update it's parent (as it recursively updates children anyways).
-            var xform = _entities.TransformQuery.Comp(data.Uid);
+            // Mini: entity may be broken/deleted client-side; don't abort state application over it.
+            if (!_entities.TransformQuery.TryGetComponent(data.Uid, out var xform))
+            {
+                _sawmill.Warning($"Cannot re-add net entity {data.NetEntity} to the broadphase: entity {data.Uid} has no transform component.");
+                return;
+            }
+
             DebugTools.Assert(xform.Broadphase == BroadphaseData.Invalid);
             xform.Broadphase = null;
             if (!_toApply.TryGetValue(xform.ParentUid, out var parent) || !parent.EnteringPvs)
@@ -1417,6 +1465,7 @@ namespace Robust.Client.GameStates
             }
 
             _detachedChunkEntities.Clear();
+            _missingMetadataEnts.Clear();
             _sawmill.Info($"Resetting all entity states to tick {state.ToSequence}.");
 
             // Construct hashset for set.Contains() checks.
@@ -1597,7 +1646,16 @@ namespace Robust.Client.GameStates
                 if (lastStateApplied.HasValue)
                     metadata.LastStateApplied = lastStateApplied.Value;
 
-                var xform = xforms.GetComponent(uid);
+                if (!xforms.TryGetComponent(uid, out var xform))
+                {
+                    // Mini: the entity is gone or broken (deleted client-side while the server still thought we had
+                    // it, half-disposed, ...). Skip it instead of throwing a KeyNotFoundException here, which used to
+                    // abort the entire state application and cascaded into more errors. Dropping the net-entity
+                    // mapping lets a later state re-create the entity from scratch.
+                    _sawmill.Warning($"Skipping PVS detach of net entity {netEntity}: entity {uid} has no transform component.");
+                    _entities.ClearNetEntity(netEntity);
+                    continue;
+                }
 
                 // TODO PVS DETACH
                 // Why is this if block here again? If a null-space entity gets sent to a player via some PVS override,
@@ -1681,7 +1739,11 @@ namespace Robust.Client.GameStates
                 if (_detachBatch.Contains(parent))
                     return true;
 
-                parent = xforms.GetComponent(parent).ParentUid;
+                // Mini: broken/deleted parents shouldn't abort state application.
+                if (!xforms.TryGetComponent(parent, out var parentXform))
+                    break;
+
+                parent = parentXform.ParentUid;
             }
 
             return false;
