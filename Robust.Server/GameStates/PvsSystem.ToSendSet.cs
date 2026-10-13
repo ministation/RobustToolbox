@@ -100,7 +100,9 @@ internal sealed partial class PvsSystem
 
         if (entered)
         {
-            var state = GetEntityState(session.Session, ent.Uid, data.EntityLastAcked, ent.Meta);
+            // Mini: the entity is (re-)entering this client's PVS, so the state may be used to create it client-side.
+            // Always carry metadata, otherwise a client that no longer has the entity throws MissingMetadataException.
+            var state = GetEntityState(session.Session, ent.Uid, data.EntityLastAcked, ent.Meta, ensureMetadata: true);
             session.States.Add(state);
             return;
         }
@@ -179,7 +181,8 @@ internal sealed partial class PvsSystem
 
         if (entered)
         {
-            var state = GetEntityState(session.Session, uid, data.EntityLastAcked, meta);
+            // Mini: see the chunk-entity overload above.
+            var state = GetEntityState(session.Session, uid, data.EntityLastAcked, meta, ensureMetadata: true);
             session.States.Add(state);
             return true;
         }
